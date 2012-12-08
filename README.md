@@ -26,10 +26,9 @@ Is rewritten into:
                     break tco;
                 }
                 {
-                    (function (_from, _to) {
-                        from = _from;
-                        to = _to;
-                    }(from + 1, to));
+                    var __from = from + 1, __to = to;
+                    from = __from;
+                    to = __to;
                     continue tco;
                 }
             }
