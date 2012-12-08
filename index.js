@@ -29,24 +29,22 @@ function returnValue(r) {
 }
 
 function tailCall(f, r) {
-    var functionExpression = {
-            type: 'FunctionExpression',
-            params: [],
-            body: {
-                type: 'BlockStatement',
-                body: []
-            }
-        },
+    var tmpVars = [],
+        assignments = [],
         i,
         identifier;
 
     for(i = 0; i < f.params.length; i++) {
         identifier = {
             type: 'Identifier',
-            name: '_' + f.params[i].name
+            name: '__' + f.params[i].name
         };
-        functionExpression.params.push(identifier);
-        functionExpression.body.body.push({
+        tmpVars.push({
+            type: 'VariableDeclarator',
+            id: identifier,
+            init: r.argument['arguments'][i]
+        });
+        assignments.push({
             type: 'ExpressionStatement',
             expression: {
                 type: 'AssignmentExpression',
@@ -60,16 +58,13 @@ function tailCall(f, r) {
     this.update({
         type: 'BlockStatement',
         body: [{
-            type: 'ExpressionStatement',
-            expression: {
-                type: 'CallExpression',
-                callee: functionExpression,
-                arguments: r.argument.arguments
-            }
-        }, {
+            type: 'VariableDeclaration',
+            declarations: tmpVars,
+            kind: 'var'
+        }].concat(assignments).concat({
             type: 'ContinueStatement',
             label: tcoLabel
-        }]
+        })
     });
 }
 
@@ -92,8 +87,7 @@ function optimizeFunction(f) {
         type: 'VariableDeclaration',
         declarations: [{
             type: 'VariableDeclarator',
-            id: resultIdentifier,
-            init: null
+            id: resultIdentifier
         }],
         kind: 'var'
     }, {
