@@ -1,0 +1,22 @@
+{
+  "name": "brushtail",
+  "version": "0.0.0",
+  "description": "JS AST rewriter for tail call elimination",
+  "bin": "main.js",
+  "main": "index.js",
+  "dependencies": {
+    "escodegen": "~0.0.15",
+    "traverse": "~0.6.3",
+    "esprima": "~1.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:pufuwozu/brushtail.git"
+  },
+  "keywords": [
+    "tco",
+    "tail-call"
+  ],
+  "author": "Brian McKenna",
+  "license": "MIT"
+}
