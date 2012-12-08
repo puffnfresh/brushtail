@@ -4,6 +4,10 @@ var traverse = require('traverse'),
     tcoLabel = {
         type: 'Identifier',
         name: 'tco'
+    },
+    resultIdentifier = {
+        type: 'Identifier',
+        name: '__tcor'
     };
 
 function returnValue(r) {
@@ -14,10 +18,7 @@ function returnValue(r) {
             expression: {
                 type: 'AssignmentExpression',
                 operator: '=',
-                left: {
-                    type: 'Identifier',
-                    name: 'result'
-                },
+                left: resultIdentifier,
                 right: r.argument
             }
         }, {
@@ -91,10 +92,7 @@ function optimizeFunction(f) {
         type: 'VariableDeclaration',
         declarations: [{
             type: 'VariableDeclarator',
-            id: {
-                type: 'Identifier',
-                name: 'result',
-            },
+            id: resultIdentifier,
             init: null
         }],
         kind: 'var'
@@ -114,10 +112,7 @@ function optimizeFunction(f) {
         }
     }, {
         type: 'ReturnStatement',
-        argument: {
-            type: 'Identifier',
-            name: 'result'
-        }
+        argument: resultIdentifier
     }];
 }
 
