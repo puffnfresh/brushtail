@@ -39,7 +39,7 @@ Is rewritten into:
 
 Using the command-line tool:
 
-    $ cat example.js | brushtail | node
+    $ brushtail example.js | node
     1000000
 
 For comparison, without the command-line tool:
