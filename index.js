@@ -116,6 +116,29 @@ function optimizeFunction(f) {
     }];
 }
 
+function topLevel(f, n) {
+    var name = f.id.name,
+        parent = n;
+
+    while(parent) {
+        if(parent.node.type == 'FunctionExpression') {
+            return false;
+        }
+
+        if(parent.node.type == 'FunctionDeclaration') {
+            if(parent.node.id.name == name) {
+                return true;
+            } else {
+                return false;
+            }
+        }
+
+        parent = parent.parent;
+    }
+
+    return false;
+}
+
 function hasOnlyTailCalls(f) {
     var name = f.id.name,
         result = traverse(f).reduce(function(accum, n) {
@@ -124,7 +147,7 @@ function hasOnlyTailCalls(f) {
 
             return {
                 any: true,
-                all: accum.all && this.parent.node.type == 'ReturnStatement'
+                all: accum.all && this.parent.node.type == 'ReturnStatement' && topLevel(f, this)
             };
         }, {
             any: false,
