@@ -18,11 +18,11 @@ example.js:
 Is rewritten into:
 
     function count(from, to) {
-        var result;
+        var __tcor;
         tco:
             while (true) {
                 if (from >= to) {
-                    result = from;
+                    __tcor = from;
                     break tco;
                 }
                 {
@@ -33,7 +33,7 @@ Is rewritten into:
                     continue tco;
                 }
             }
-        return result;
+        return __tcor;
     }
     console.log(count(0, 1000000));
 
