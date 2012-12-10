@@ -1,15 +1,30 @@
 #!/usr/bin/env node
 var brushtail = require('./index'),
     fs = require('fs'),
-    content;
+    args = process.argv.slice(2),
+    ast = false,
+    content,
+    result;
 
-process.stdin.resume();
-
-if(process.argv.length > 2) {
-    content = fs.readFileSync(process.argv[2], 'utf8');
-} else {
-    content = fs.readSync(process.stdin.fd, 102400, 'utf8')[0];
+if(args.length && args[0] == '-c') {
+    ast = true;
+    args.shift();
 }
-console.log(brushtail.tco(content));
 
-process.stdin.pause();
+if(args.length) {
+    content = fs.readFileSync(args[0], 'utf8');
+} else {
+    process.stdin.resume();
+    content = fs.readSync(process.stdin.fd, 102400, 'utf8')[0];
+    process.stdin.pause();
+}
+
+if(ast) {
+    content = JSON.parse(content);
+    brushtail.mutateAST(content);
+    result = JSON.stringify(content);
+} else {
+    result = brushtail.tco(content);
+}
+
+console.log(result);
