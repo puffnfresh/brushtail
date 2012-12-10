@@ -8,25 +8,28 @@ var estraverse = require('estraverse'),
         name: '__tcor'
     };
 
-function equals(a, b) {
-    var equal = true,
+function equals(a, b, s) {
+    var equal,
         k;
 
-    if(a === null || b === null)
+    if(typeof a != typeof b)
         return false;
 
-    if(a == b)
-        return true;
+    if(typeof a == 'object' || typeof a == 'array') {
+        equal = true;
 
-    for(k in a) {
-        equal = equal && equals(a[k], b[k]);
+        for(k in a) {
+            equal = equal && equals(a[k], b[k], s);
+        }
+
+        for(k in b) {
+            equal = equal && equals(a[k], b[k], s);
+        }
+
+        return equal;
     }
 
-    for(k in b) {
-        equal = equal && equals(a[k], b[k]);
-    }
-
-    return equal;
+    return a === b;
 }
 
 function traverseWithStack(t, o) {
@@ -194,10 +197,14 @@ function hasOnlyTailCalls(top, f) {
         any = false,
         result = traverseWithStack(f, {
             enter: function(n, stack) {
+                var id;
+
                 if(!all || n.type != 'CallExpression')
                     return;
 
-                if(!equals(n.callee, functionId(top, f)))
+                id = functionId(top, f);
+
+                if(!id || !equals(n.callee, id))
                     return;
 
                 any = true;
