@@ -6,7 +6,7 @@
   "main": "index.js",
   "dependencies": {
     "escodegen": "~0.0.15",
-    "traverse": "~0.6.3",
+    "estraverse": "~0.0.3",
     "esprima": "~1.0.2"
   },
   "repository": {
