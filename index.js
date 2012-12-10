@@ -1,6 +1,4 @@
-var traverse = require('traverse'),
-    esprima = require('esprima'),
-    escodegen = require('escodegen'),
+var estraverse = require('estraverse'),
     tcoLabel = {
         type: 'Identifier',
         name: 'tco'
@@ -161,8 +159,12 @@ function mutateAST(ast) {
 }
 
 function tco(content) {
-    var ast = esprima.parse(content);
+    var esprima = require('esprima'),
+        escodegen = require('escodegen'),
+        ast = esprima.parse(content);
+
     mutateAST(ast);
+
     return escodegen.generate(ast);
 }
 
