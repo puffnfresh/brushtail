@@ -1,4 +1,4 @@
-var traverse = require('traverse'),
+var estraverse = require('estraverse'),
     esprima = require('esprima'),
     escodegen = require('escodegen'),
     tcoLabel = {
@@ -11,7 +11,7 @@ var traverse = require('traverse'),
     };
 
 function returnValue(r) {
-    this.update({
+    return {
         type: 'BlockStatement',
         body: [{
             type: 'ExpressionStatement',
@@ -25,7 +25,7 @@ function returnValue(r) {
             type: 'BreakStatement',
             label: tcoLabel
         }]
-    });
+    };
 }
 
 function tailCall(f, r) {
@@ -55,7 +55,7 @@ function tailCall(f, r) {
         });
     }
 
-    this.update({
+    return {
         type: 'BlockStatement',
         body: [{
             type: 'VariableDeclaration',
@@ -65,23 +65,23 @@ function tailCall(f, r) {
             type: 'ContinueStatement',
             label: tcoLabel
         })
-    });
+    };
 }
 
 function optimizeFunction(f) {
     var name = f.id.name,
         block = f.body;
 
-    traverse(block.body).forEach(function(n) {
+    estraverse.replace(block, {enter: function(n) {
         if(!n || n.type != 'ReturnStatement')
-            return;
+            return n;
 
         if(n.argument.type == 'CallExpression' && n.argument.callee.name == name) {
-            tailCall.call(this, f, n);
+            return tailCall(f, n);
         } else {
-            returnValue.call(this, n);
+            return returnValue(n);
         }
-    });
+    }});
 
     block.body = [{
         type: 'VariableDeclaration',
@@ -110,24 +110,23 @@ function optimizeFunction(f) {
     }];
 }
 
-function topLevel(f, n) {
-    var name = f.id.name,
-        parent = n;
+function topLevel(f, ancestry) {
+    var name = f.id.name, node;
 
-    while(parent) {
-        if(parent.node.type == 'FunctionExpression') {
+    for(var i = ancestry.length; i; --i) {
+        node = ancestry[i - 1];
+
+        if(node.type == 'FunctionExpression') {
             return false;
         }
 
-        if(parent.node.type == 'FunctionDeclaration') {
-            if(parent.node.id.name == name) {
+        if(node.type == 'FunctionDeclaration') {
+            if(node.id.name == name) {
                 return true;
             } else {
                 return false;
             }
         }
-
-        parent = parent.parent;
     }
 
     return false;
@@ -135,29 +134,36 @@ function topLevel(f, n) {
 
 function hasOnlyTailCalls(f) {
     var name = f.id.name,
-        result = traverse(f).reduce(function(accum, n) {
-            if(!accum.all || !n || n.type != 'CallExpression' || n.callee.name != name)
-                return accum;
-
-            return {
-                any: true,
-                all: accum.all && this.parent.node.type == 'ReturnStatement' && topLevel(f, this)
-            };
-        }, {
+        accum = {
             any: false,
             all: true
-        });
+        },
+        ancestry = [];
 
-    return result.any && result.all;
+    estraverse.traverse(f, {
+        enter: function(n) {
+            ancestry.push(n);
+            if(accum.all && n && n.type == 'ReturnStatement' && n.argument && n.argument.type == 'CallExpression' && n.argument.callee.name == name)
+                accum = {
+                    any: true,
+                    all: accum.all && topLevel(f, ancestry)
+                };
+        },
+        leave: function(n) {
+            ancestry.pop();
+        }
+    });
+
+    return accum.any && accum.all;
 }
 
 function mutateAST(ast) {
-    traverse(ast).forEach(function(n) {
+    estraverse.traverse(ast, {enter: function(n) {
         if(!n || n.type != 'FunctionDeclaration' || !hasOnlyTailCalls(n))
             return;
 
         optimizeFunction(n);
-    });
+    }});
 }
 
 function tco(content) {
