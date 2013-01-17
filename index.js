@@ -178,15 +178,16 @@ function hasOnlyTailCalls(f) {
 
 function mutateAST(ast) {
     var scopeManager = escope.analyze(ast);
+    scopeManager.attach();
 
     estraverse.traverse(ast, {enter: function(n) {
         if(!n || n.type != 'FunctionDeclaration' || !hasOnlyTailCalls(n))
             return;
 
-        scopeManager.attach();
         optimizeFunction(n, scopeManager.acquire(n));
-        scopeManager.detach();
     }});
+
+    scopeManager.detach();
 
 }
 
