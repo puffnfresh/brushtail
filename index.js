@@ -1,16 +1,13 @@
 var estraverse = require('estraverse'),
+    escope = require('escope'),
     esprima = require('esprima'),
     escodegen = require('escodegen'),
     tcoLabel = {
         type: 'Identifier',
         name: 'tco'
-    },
-    resultIdentifier = {
-        type: 'Identifier',
-        name: '__tcor'
     };
 
-function returnValue(r) {
+function returnValue(r, resultIdentifier) {
     return {
         type: 'BlockStatement',
         body: [{
@@ -28,7 +25,7 @@ function returnValue(r) {
     };
 }
 
-function tailCall(f, r) {
+function tailCall(f, r, scope) {
     var tmpVars = [],
         assignments = [],
         i,
@@ -37,7 +34,7 @@ function tailCall(f, r) {
     for(i = 0; i < f.params.length; i++) {
         identifier = {
             type: 'Identifier',
-            name: '__' + f.params[i].name
+            name: freshNameWhile('__' + f.params[i].name, function(name){ return !inScope(scope, name); })
         };
         tmpVars.push({
             type: 'VariableDeclarator',
@@ -68,18 +65,40 @@ function tailCall(f, r) {
     };
 }
 
-function optimizeFunction(f) {
+function inScope(scope, name){
+    if(scope.set.has(name)) return true;
+    for (var i = 0, iz = scope.through.length; i < iz; ++i) {
+        if (scope.through[i].identifier.name === name) {
+            return true;
+        }
+    }
+    return false;
+};
+
+function freshNameWhile(prefix, test){
+    name = prefix;
+    // TODO: the size of this name can be optimised with a smarter algorithm
+    while(!test(name)) name += "$";
+    return name;
+}
+
+function optimizeFunction(f, scope) {
     var name = f.id.name,
         block = f.body;
+
+    var resultIdentifier = {
+        type: 'Identifier',
+        name: freshNameWhile('__tcor', function(name){ return !inScope(scope, name); })
+    };
 
     estraverse.replace(block, {enter: function(n) {
         if(!n || n.type != 'ReturnStatement')
             return n;
 
         if(n.argument.type == 'CallExpression' && n.argument.callee.name == name) {
-            return tailCall(f, n);
+            return tailCall(f, n, scope);
         } else {
-            return returnValue(n);
+            return returnValue(n, resultIdentifier);
         }
     }});
 
@@ -158,12 +177,17 @@ function hasOnlyTailCalls(f) {
 }
 
 function mutateAST(ast) {
+    var scopeManager = escope.analyze(ast);
+
     estraverse.traverse(ast, {enter: function(n) {
         if(!n || n.type != 'FunctionDeclaration' || !hasOnlyTailCalls(n))
             return;
 
-        optimizeFunction(n);
+        scopeManager.attach();
+        optimizeFunction(n, scopeManager.acquire(n));
+        scopeManager.detach();
     }});
+
 }
 
 function tco(content) {
