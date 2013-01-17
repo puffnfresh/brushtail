@@ -1,17 +1,14 @@
-var traverse = require('traverse'),
+var estraverse = require('estraverse'),
+    escope = require('escope'),
     esprima = require('esprima'),
     escodegen = require('escodegen'),
     tcoLabel = {
         type: 'Identifier',
         name: 'tco'
-    },
-    resultIdentifier = {
-        type: 'Identifier',
-        name: '__tcor'
     };
 
-function returnValue(r) {
-    this.update({
+function returnValue(r, resultIdentifier) {
+    return {
         type: 'BlockStatement',
         body: [{
             type: 'ExpressionStatement',
@@ -25,10 +22,10 @@ function returnValue(r) {
             type: 'BreakStatement',
             label: tcoLabel
         }]
-    });
+    };
 }
 
-function tailCall(f, r) {
+function tailCall(f, r, scope) {
     var tmpVars = [],
         assignments = [],
         i,
@@ -37,7 +34,7 @@ function tailCall(f, r) {
     for(i = 0; i < f.params.length; i++) {
         identifier = {
             type: 'Identifier',
-            name: '__' + f.params[i].name
+            name: freshNameWhile('__' + f.params[i].name, function(name){ return !inScope(scope, name); })
         };
         tmpVars.push({
             type: 'VariableDeclarator',
@@ -55,7 +52,7 @@ function tailCall(f, r) {
         });
     }
 
-    this.update({
+    return {
         type: 'BlockStatement',
         body: [{
             type: 'VariableDeclaration',
@@ -65,23 +62,45 @@ function tailCall(f, r) {
             type: 'ContinueStatement',
             label: tcoLabel
         })
-    });
+    };
 }
 
-function optimizeFunction(f) {
+function inScope(scope, name){
+    if(scope.set.has(name)) return true;
+    for (var i = 0, iz = scope.through.length; i < iz; ++i) {
+        if (scope.through[i].identifier.name === name) {
+            return true;
+        }
+    }
+    return false;
+};
+
+function freshNameWhile(prefix, test){
+    name = prefix;
+    // TODO: the size of this name can be optimised with a smarter algorithm
+    while(!test(name)) name += "$";
+    return name;
+}
+
+function optimizeFunction(f, scope) {
     var name = f.id.name,
         block = f.body;
 
-    traverse(block.body).forEach(function(n) {
+    var resultIdentifier = {
+        type: 'Identifier',
+        name: freshNameWhile('__tcor', function(name){ return !inScope(scope, name); })
+    };
+
+    estraverse.replace(block, {enter: function(n) {
         if(!n || n.type != 'ReturnStatement')
-            return;
+            return n;
 
         if(n.argument.type == 'CallExpression' && n.argument.callee.name == name) {
-            tailCall.call(this, f, n);
+            return tailCall(f, n, scope);
         } else {
-            returnValue.call(this, n);
+            return returnValue(n, resultIdentifier);
         }
-    });
+    }});
 
     block.body = [{
         type: 'VariableDeclaration',
@@ -110,24 +129,23 @@ function optimizeFunction(f) {
     }];
 }
 
-function topLevel(f, n) {
-    var name = f.id.name,
-        parent = n;
+function topLevel(f, ancestry) {
+    var name = f.id.name, node;
 
-    while(parent) {
-        if(parent.node.type == 'FunctionExpression') {
+    for(var i = ancestry.length; i; --i) {
+        node = ancestry[i - 1];
+
+        if(node.type == 'FunctionExpression') {
             return false;
         }
 
-        if(parent.node.type == 'FunctionDeclaration') {
-            if(parent.node.id.name == name) {
+        if(node.type == 'FunctionDeclaration') {
+            if(node.id.name == name) {
                 return true;
             } else {
                 return false;
             }
         }
-
-        parent = parent.parent;
     }
 
     return false;
@@ -135,29 +153,42 @@ function topLevel(f, n) {
 
 function hasOnlyTailCalls(f) {
     var name = f.id.name,
-        result = traverse(f).reduce(function(accum, n) {
-            if(!accum.all || !n || n.type != 'CallExpression' || n.callee.name != name)
-                return accum;
-
-            return {
-                any: true,
-                all: accum.all && this.parent.node.type == 'ReturnStatement' && topLevel(f, this)
-            };
-        }, {
+        accum = {
             any: false,
             all: true
-        });
+        },
+        ancestry = [];
 
-    return result.any && result.all;
+    estraverse.traverse(f, {
+        enter: function(n) {
+            ancestry.push(n);
+            if(accum.all && n && n.type == 'ReturnStatement' && n.argument && n.argument.type == 'CallExpression' && n.argument.callee.name == name)
+                accum = {
+                    any: true,
+                    all: accum.all && topLevel(f, ancestry)
+                };
+        },
+        leave: function(n) {
+            ancestry.pop();
+        }
+    });
+
+    return accum.any && accum.all;
 }
 
 function mutateAST(ast) {
-    traverse(ast).forEach(function(n) {
+    var scopeManager = escope.analyze(ast);
+    scopeManager.attach();
+
+    estraverse.traverse(ast, {enter: function(n) {
         if(!n || n.type != 'FunctionDeclaration' || !hasOnlyTailCalls(n))
             return;
 
-        optimizeFunction(n);
-    });
+        optimizeFunction(n, scopeManager.acquire(n));
+    }});
+
+    scopeManager.detach();
+
 }
 
 function tco(content) {
