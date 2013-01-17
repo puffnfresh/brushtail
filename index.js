@@ -59,6 +59,10 @@ function nodeStack(top, f) {
     return result;
 }
 
+function isFunctionNode(n) {
+    return ['FunctionDeclaration', 'FunctionExpression'].indexOf(n.type) != -1;
+}
+
 function returnValue(r, stack) {
     r.type =  'BlockStatement';
     r.body = [{
@@ -117,8 +121,15 @@ function optimizeFunction(top, f) {
     var block = f.body,
         traversal = {
             enter: function(n, stack) {
+                var i;
+
                 if(n.type != 'ReturnStatement')
                     return;
+
+                for(i = 0; i < stack.length; i++) {
+                    if(isFunctionNode(stack[i]))
+                        return;
+                }
 
                 if(n.argument.type == 'CallExpression' && equals(n.argument.callee, functionId(top, f))) {
                     tailCall(f, n, stack);
@@ -218,7 +229,7 @@ function hasOnlyTailCalls(top, f) {
 function mutateAST(ast) {
     estraverse.traverse(ast, {
         enter: function(n) {
-            if(['FunctionDeclaration', 'FunctionExpression'].indexOf(n.type) == -1 || !hasOnlyTailCalls(ast, n))
+            if(!isFunctionNode(n) || !hasOnlyTailCalls(ast, n))
                 return;
 
             optimizeFunction(ast, n);
