@@ -7,6 +7,10 @@
   "dependencies": {
     "escodegen": "~0.0.15",
     "estraverse": "~0.0.4",
+<<<<<<< HEAD
+=======
+    "escope": "~0.0.11",
+>>>>>>> 30d7ae42009dd46aea0a05229d2c9a60a0fc4fe0
     "esprima": "~1.0.2"
   },
   "repository": {
