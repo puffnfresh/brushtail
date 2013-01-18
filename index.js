@@ -32,54 +32,48 @@ function equals(a, b, s) {
     return a === b;
 }
 
-function traverseWithStack(t, o) {
-    var stack = [];
-    estraverse.traverse(t, {
+function nodeAncestry(f, ast) {
+    var ancestry = [],
+        result;
+
+    estraverse.traverse(ast, {
         enter: function(n) {
-            stack.unshift(n);
-            if(o.enter) o.enter(n, stack);
+            if(n == f) result = ancestry.slice();
+            if(result) return;
+
+            ancestry.push(n);
         },
-        leave: function(n) {
-            stack.shift();
-            if(o.leave) o.leave(n, stack);
+        leave: function() {
+            ancestry.pop();
         }
     });
+
+    return result;
 }
 
-function nodeStack(top, f) {
-    var result = [];
-    traverseWithStack(top, {
-        enter: function(n, stack) {
-            if(n != f)
-                return;
-
-            result = stack.slice();
-        }
-    });
-    return result;
+function returnValue(r) {
+    return {
+        type: 'BlockStatement',
+        body: [{
+            type: 'ExpressionStatement',
+            expression: {
+                type: 'AssignmentExpression',
+                operator: '=',
+                left: resultIdentifier,
+                right: r.argument
+            }
+        }, {
+            type: 'BreakStatement',
+            label: tcoLabel
+        }]
+    };
 }
 
 function isFunctionNode(n) {
     return ['FunctionDeclaration', 'FunctionExpression'].indexOf(n.type) != -1;
 }
 
-function returnValue(r, stack) {
-    r.type =  'BlockStatement';
-    r.body = [{
-        type: 'ExpressionStatement',
-        expression: {
-            type: 'AssignmentExpression',
-            operator: '=',
-            left: resultIdentifier,
-            right: r.argument
-        }
-    }, {
-        type: 'BreakStatement',
-        label: tcoLabel
-    }];
-}
-
-function tailCall(f, r, stack) {
+function tailCall(f, r) {
     var tmpVars = [],
         assignments = [],
         i,
@@ -106,43 +100,46 @@ function tailCall(f, r, stack) {
         });
     }
 
-    r.type = 'BlockStatement';
-    r.body = [{
-        type: 'VariableDeclaration',
-        declarations: tmpVars,
-        kind: 'var'
-    }].concat(assignments).concat({
-        type: 'ContinueStatement',
-        label: tcoLabel
-    });
+    return {
+        type: 'BlockStatement',
+        body: [{
+            type: 'VariableDeclaration',
+            declarations: tmpVars,
+            kind: 'var'
+        }].concat(assignments).concat({
+            type: 'ContinueStatement',
+            label: tcoLabel
+        })
+    };
 }
 
-function optimizeFunction(top, f) {
-    var block = f.body,
-        traversal = {
-            enter: function(n, stack) {
-                var i;
+function optimizeFunction(f, ast) {
+    var id = functionId(f, ast),
+        block = f.body,
+        ancestry = [];
 
-                if(n.type != 'ReturnStatement')
+    estraverse.replace(block, {
+        enter: function(n) {
+            ancestry.push(n);
+
+            if(!n || n.type != 'ReturnStatement')
+                return n;
+
+            for(i = ancestry.length - 1; i >= 0; i--) {
+                if(isFunctionNode(ancestry[i]))
                     return;
+            }
 
-                for(i = 0; i < stack.length; i++) {
-                    if(isFunctionNode(stack[i]))
-                        return;
-                }
-
-                if(n.argument.type == 'CallExpression' && equals(n.argument.callee, functionId(top, f))) {
-                    tailCall(f, n, stack);
-                } else {
-                    returnValue(n, stack);
-                }
+            if(n.argument.type == 'CallExpression' && equals(n.argument.callee, id)) {
+                return tailCall(f, n);
+            } else {
+                return returnValue(n);
             }
         },
-        i;
-
-    for(i = 0; i < block.body.length; i++) {
-        traverseWithStack(block.body[i], traversal);
-    }
+        leave: function(n) {
+            ancestry.pop();
+        }
+    });
 
     block.body = [{
         type: 'VariableDeclaration',
@@ -171,68 +168,81 @@ function optimizeFunction(top, f) {
     }];
 }
 
-function topLevel(top, n) {
-    var stack = nodeStack(top, n),
+function topLevel(n, ast) {
+    var ancestry = nodeAncestry(n, ast),
+        node,
         i;
 
-    for(i = 0; i < stack.length; i++) {
-        if(stack[i].type == 'FunctionExpression') {
-            if(stack[i + 1].type == 'VariableDeclarator') {
-                return equals(stack[i + 1].id, n.callee);
-            } else if(stack[i + 1].type == 'AssignmentExpression') {
-                return equals(stack[i + 1].left, n.callee);
-            }
-            return false;
-        } else if(stack[i].type == 'FunctionDeclaration') {
-            return equals(stack[i].id, n.callee);
+    for(i = ancestry.length - 1; i >= 0; --i) {
+        node = ancestry[i];
+
+        if(isFunctionNode(node)) {
+            return equals(functionId(node, ast), n.argument.callee);
         }
     }
+
+    return false;
 }
 
-function functionId(top, f) {
-    var stack;
+function functionId(f, ast) {
+    var ancestry,
+        parent;
+
     if(f.type == 'FunctionDeclaration') {
         return f.id;
     }
 
-    stack = nodeStack(top, f);
-    if(stack[1].type == 'VariableDeclarator') {
-        return stack[1].id;
-    } else {
-        return stack[1].left;
+    ancestry = nodeAncestry(f, ast);
+    parent = ancestry[ancestry.length - 1];
+    if(parent.type == 'VariableDeclarator') {
+        return parent.id;
+    } else if(parent.type == 'AssignmentExpression') {
+        return parent.left;
     }
 }
 
-function hasOnlyTailCalls(top, f) {
-    var all = true,
-        any = false,
-        result = traverseWithStack(f, {
-            enter: function(n, stack) {
-                var id;
+function hasOnlyTailCalls(f, ast) {
+    var accum = {
+            any: false,
+            all: true
+        },
+        ancestry = [];
 
-                if(!all || n.type != 'CallExpression')
-                    return;
+    estraverse.traverse(f, {
+        enter: function(n) {
+	    var id;
 
-                id = functionId(top, f);
+            ancestry.push(n);
 
-                if(!id || !equals(n.callee, id))
-                    return;
+	    if(!accum.all) return;
+	    if(n.type != 'ReturnStatement') return;
+	    if(!n.argument) return;
+	    if(n.argument.type != 'CallExpression') return;
 
-                any = true;
-                all = all && stack[1].type == 'ReturnStatement' && topLevel(top, n);
-            }
-        });
+	    id = functionId(f, ast);
 
-    return any && all;
+	    if(!id || !equals(n.argument.callee, id)) return;
+
+            accum = {
+                any: true,
+                all: accum.all && topLevel(n, ast)
+            };
+        },
+        leave: function(n) {
+            ancestry.pop();
+        }
+    });
+
+    return accum.any && accum.all;
 }
 
 function mutateAST(ast) {
     estraverse.traverse(ast, {
         enter: function(n) {
-            if(!isFunctionNode(n) || !hasOnlyTailCalls(ast, n))
+            if(!isFunctionNode(n) || !hasOnlyTailCalls(n, ast))
                 return;
 
-            optimizeFunction(ast, n);
+            optimizeFunction(n, ast);
         }
     });
 }
