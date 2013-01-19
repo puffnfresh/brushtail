@@ -127,7 +127,7 @@ function freshNameWhile(prefix, test){
     return name;
 }
 
-function optimizeFunction(f, ast) {
+function optimizeFunction(f, ast, scope) {
     var id = functionId(f, ast),
         block = f.body,
         ancestry = [];
@@ -266,7 +266,7 @@ function mutateAST(ast) {
             if(!isFunctionNode(n) || !hasOnlyTailCalls(n, ast))
                 return;
 
-            optimizeFunction(n, ast);
+            optimizeFunction(n, ast, scopeManager.acquire(n));
         }
     });
 
