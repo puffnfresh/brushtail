@@ -231,18 +231,18 @@ function hasOnlyTailCalls(f, ast) {
 
     estraverse.traverse(f, {
         enter: function(n) {
-	    var id;
+            var id;
 
-            ancestry.push(n);
+                ancestry.push(n);
 
-	    if(!accum.all) return;
-	    if(n.type != 'ReturnStatement') return;
-	    if(!n.argument) return;
-	    if(n.argument.type != 'CallExpression') return;
+            if(!accum.all) return;
+            if(n.type != 'ReturnStatement') return;
+            if(!n.argument) return;
+            if(n.argument.type != 'CallExpression') return;
 
-	    id = functionId(f, ast);
+            id = functionId(f, ast);
 
-	    if(!id || !equals(n.argument.callee, id)) return;
+            if(!id || !equals(n.argument.callee, id)) return;
 
             accum = {
                 any: true,
