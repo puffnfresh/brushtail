@@ -209,7 +209,7 @@ function functionId(f, ast) {
     var ancestry,
         parent;
 
-    if(f.type == 'FunctionDeclaration') {
+    if(f.id) {
         return f.id;
     }
 
