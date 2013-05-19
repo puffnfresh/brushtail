@@ -4,6 +4,12 @@
   "description": "JS AST rewriter for tail call elimination",
   "bin": "main.js",
   "main": "index.js",
+  "scripts": {
+    "bundle": "$(npm bin)/cjsify --ignore-missing -x brushtail -o brushtail.js index.js"
+  },
+  "devDependencies": {
+    "commonjs-everywhere": "~0.7.1"
+  },
   "optionalDependencies": {
     "escodegen": "~0.0.15",
     "esprima": "~1.0.2"
