@@ -141,6 +141,8 @@ function optimizeFunction(f, ast, scope) {
 
     estraverse.replace(block, {
         enter: function(n) {
+            var i;
+
             ancestry.push(n);
 
             if(!n || n.type != 'ReturnStatement')
