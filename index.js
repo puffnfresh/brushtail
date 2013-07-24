@@ -150,7 +150,7 @@ function optimizeFunction(f, ast, scope) {
 
             for(i = ancestry.length - 1; i >= 0; i--) {
                 if(isFunctionNode(ancestry[i]))
-                    return;
+                    return n;
             }
 
             if(n.argument.type == 'CallExpression' && equals(n.argument.callee, id)) {
