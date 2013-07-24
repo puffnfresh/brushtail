@@ -1,6 +1,6 @@
 {
   "name": "brushtail",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "JS AST rewriter for tail call elimination",
   "bin": "main.js",
   "main": "index.js",
